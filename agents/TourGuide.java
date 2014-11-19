@@ -1,4 +1,5 @@
 package agents;
+import jade.core.Agent;
 import jade.domain.DFService;
 import jade.domain.FIPAException;
 import jade.domain.FIPANames;
@@ -11,67 +12,65 @@ import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import jade.proto.AchieveREResponder;
 
+import java.io.IOException;
+import java.util.ArrayList;
+
 
 public class TourGuide extends AbstractAgent{
 
 	private static final long serialVersionUID = 1L;
 
-	@SuppressWarnings("serial")
 	@Override
 	public void setupWithoutArgs(){
-		
+		try {
+			publishService();
+			addBehaviour(new ReceiveTourRequests(this));
+		} catch (FIPAException e) {
+			e.printStackTrace();
+		}
+	}
+
+	private void publishService() throws FIPAException{
 		DFAgentDescription dfd = new DFAgentDescription();
 		dfd.setName( getAID() );
 		ServiceDescription sd = new ServiceDescription();
 		sd.setType( "tourOrganizer" );
 		sd.setName( getLocalName() );
 		dfd.addServices(sd);
-		try { DFService.register(this, dfd ); }
-		catch (FIPAException fe) { fe.printStackTrace(); }
+		DFService.register(this, dfd ); 
+	}
+	
+	@SuppressWarnings("serial")
+	private static class ReceiveTourRequests extends AchieveREResponder{
 		
+		private static MessageTemplate template = MessageTemplate.and(
+			MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_REQUEST),
+			MessageTemplate.MatchPerformative(ACLMessage.REQUEST) 
+		);
+		
+		public ReceiveTourRequests(Agent a) {
+			super(a, template);
+		}
 
-		MessageTemplate template = MessageTemplate.and(
-				MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_REQUEST),
-				MessageTemplate.MatchPerformative(ACLMessage.REQUEST) 
-				);
+		@Override
+		protected ACLMessage handleRequest(ACLMessage request) throws NotUnderstoodException, RefuseException {
+			ACLMessage agree = request.createReply();
+			agree.setPerformative(ACLMessage.AGREE);
+			return agree;
+		}
 
-		addBehaviour(new AchieveREResponder(this, template) {
-			protected ACLMessage handleRequest(ACLMessage request) throws NotUnderstoodException, RefuseException {
-				System.out.println("Agent "+getLocalName()+": REQUEST received from "+request.getSender().getName()+". Action is "+request.getContent());
-				if (checkAction()) {
-					System.out.println("Agent "+getLocalName()+": Agree");
-					ACLMessage agree = request.createReply();
-					agree.setPerformative(ACLMessage.AGREE);
-					return agree;
-				}
-				else {
-					System.out.println("Agent "+getLocalName()+": Refuse");
-					throw new RefuseException("check-failed");
-				}
+		@Override
+		protected ACLMessage prepareResultNotification(ACLMessage request, ACLMessage response) throws FailureException {
+			try {
+				ACLMessage informTour = request.createReply();
+				informTour.setPerformative(ACLMessage.INFORM);
+				informTour.setContentObject(new Tour(new ArrayList<Integer>()));
+				return informTour;
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
-
-			protected ACLMessage prepareResultNotification(ACLMessage request, ACLMessage response) throws FailureException {
-				if (performAction()) {
-					System.out.println("Agent "+getLocalName()+": Action successfully performed");
-					ACLMessage inform = request.createReply();
-					inform.setPerformative(ACLMessage.INFORM);
-					return inform;
-				}
-				else {
-					System.out.println("Agent "+getLocalName()+": Action failed");
-					throw new FailureException("unexpected-error");
-				}	
-			}
-		} );
+			return null;
+		}
 	}
 
-	private boolean checkAction() {
-		// Simulate a check by generating a random number
-		return (Math.random() > 0.2);
-	}
-
-	private boolean performAction() {
-		// Simulate action execution by generating a random number
-		return (Math.random() > 0.2);
-	}
 }

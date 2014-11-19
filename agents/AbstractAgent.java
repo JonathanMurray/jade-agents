@@ -16,6 +16,13 @@ public class AbstractAgent extends Agent{
 	private static final long serialVersionUID = 1L;
 	
 	@Override
+	public void takeDown(){
+		System.out.println("takeDown " + getLocalName());
+		//TODO should deregister any services (?)
+		super.takeDown();
+	}
+	
+	@Override
 	public final void setup(){
 		Object[] args = getArguments();
 		System.out.println("setup " + getLocalName() + arrayToString(args));
@@ -62,16 +69,18 @@ public class AbstractAgent extends Agent{
 	}
 	
 	public void sendVerbose(ACLMessage msg){
-		String log = getName() + " ---> ";
+		String log = getLocalName() + " ---[" + msg.getPerformative() + "]--> ";
 		@SuppressWarnings("rawtypes")
 		Iterator receivers = msg.getAllReceiver();
 		while(receivers.hasNext()){
 			AID receiver = (AID) receivers.next();
-			log += receiver.getName() + " ";
+			log += receiver.getLocalName() + " ";
 		}
 		System.out.println(log);
 		send(msg);
 	}
+	
+	
 	
 	private String arrayToString(Object[] array){
 		if(array == null){
