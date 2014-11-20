@@ -5,20 +5,17 @@ import jade.domain.FIPAException;
 import jade.domain.FIPANames;
 import jade.domain.FIPAAgentManagement.DFAgentDescription;
 import jade.domain.FIPAAgentManagement.FailureException;
-import jade.domain.FIPAAgentManagement.NotUnderstoodException;
-import jade.domain.FIPAAgentManagement.RefuseException;
 import jade.domain.FIPAAgentManagement.ServiceDescription;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
-import jade.proto.AchieveREResponder;
+import jade.proto.SimpleAchieveREResponder;
 
 import java.io.IOException;
 import java.util.ArrayList;
 
 
+@SuppressWarnings("serial")
 public class TourGuide extends AbstractAgent{
-
-	private static final long serialVersionUID = 1L;
 
 	@Override
 	public void setupWithoutArgs(){
@@ -41,7 +38,7 @@ public class TourGuide extends AbstractAgent{
 	}
 	
 	@SuppressWarnings("serial")
-	private static class ReceiveTourRequests extends AchieveREResponder{
+	private static class ReceiveTourRequests extends SimpleAchieveREResponder{
 		
 		private static MessageTemplate template = MessageTemplate.and(
 			MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_REQUEST),
@@ -50,13 +47,6 @@ public class TourGuide extends AbstractAgent{
 		
 		public ReceiveTourRequests(Agent a) {
 			super(a, template);
-		}
-
-		@Override
-		protected ACLMessage handleRequest(ACLMessage request) throws NotUnderstoodException, RefuseException {
-			ACLMessage agree = request.createReply();
-			agree.setPerformative(ACLMessage.AGREE);
-			return agree;
 		}
 
 		@Override

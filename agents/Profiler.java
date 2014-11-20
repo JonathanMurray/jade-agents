@@ -1,18 +1,17 @@
 package agents;
 
-import jade.core.AID;
-import jade.core.Agent;
 import jade.core.behaviours.CyclicBehaviour;
-import jade.core.behaviours.OneShotBehaviour;
-import jade.core.behaviours.TickerBehaviour;
+import jade.core.behaviours.WakerBehaviour;
 import jade.domain.DFService;
 import jade.domain.FIPAException;
-import jade.domain.FIPANames;
 import jade.domain.FIPAAgentManagement.DFAgentDescription;
 import jade.domain.FIPAAgentManagement.ServiceDescription;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import jade.lang.acl.UnreadableException;
+
+import java.util.Iterator;
+import java.util.Scanner;
 
 @SuppressWarnings({ "serial" })
 public class Profiler extends AbstractAgent{
@@ -22,48 +21,66 @@ public class Profiler extends AbstractAgent{
 	private String name = "Jonathan";
 	private int age = 24;
 	private String occupation = "Student";
-	private DFAgentDescription tourOrganizer;
+	private DFAgentDescription[] tourOrganizers;
 
 	@Override
 	public void setupWithoutArgs(){
 		prepareOrganizerSearch();
-		TickerBehaviour askForTours = new TickerBehaviour(this, ASK_FOR_TOUR_PERIOD_MS) {
-			@Override
-			protected void onTick() {
-				addBehaviour(new AskForTour(Profiler.this));
-			}
-		};
-		addBehaviour(askForTours);
-		addBehaviour(new ReceiveTours(this));
+		addBehaviour(new PresentServices(1000));
+//		addBehaviour(new ReceiveTours(this));
 	}
 	
-	private static class AskForTour extends OneShotBehaviour{
-		private Profiler profiler;
-		public AskForTour(Profiler profiler) {
-			super(profiler);
-			this.profiler = profiler;
-		}
+	private class PresentServices extends WakerBehaviour{
 
-		@Override
-		public void action() {
-			DFAgentDescription[] organizers = profiler.findTourOrganizers();
-			if(organizers.length > 0){
-				AID organizer = organizers[0].getName();
-				ACLMessage askForTour = new ACLMessage(ACLMessage.REQUEST);
-				askForTour.setProtocol(FIPANames.InteractionProtocol.FIPA_REQUEST);
+		public PresentServices(long timeout) {
+			super(Profiler.this, timeout);
+		}
+		
+		public void onWake(){
+			DFAgentDescription[] agents = findServices();
+			if(agents.length > 0){
 				
-				askForTour.addReceiver(organizer);
-				profiler.sendVerbose(askForTour);
+				System.out.println("The following services were found:");
+				for(int i = 0; i < agents.length; i++){
+					DFAgentDescription agent = agents[i];
+					
+					System.out.print(i + ": " + agent.getName().getLocalName() + "(");
+					Iterator<ServiceDescription> it = agent.getAllServices();
+					while(it.hasNext()){
+						System.out.print(" " + it.next().getType());
+					}
+					System.out.println(")");
+				}
+				
+				int choice = promptIntUntilCorrect("Write a number to choose one of them", 0, agents.length - 1);
+				DFAgentDescription agent = agents[choice];
+				System.out.println("How many artifacts would you like to visit?");
+				
 			}else{
 				System.out.println("no organizer found.");
 			}
 		}
+		
+		private int promptIntUntilCorrect(String prompt, int min, int max){
+			Scanner reader = new Scanner(System.in);
+			while(true){
+				System.out.println(prompt);
+				int input = reader.nextInt();
+				if(input >= min && input <= max){
+					reader.close();
+					return input;
+				}
+				System.out.println("Invalid input!");
+			}
+		}
+		
 	}
 	
-	private static class ReceiveTours extends CyclicBehaviour{
 
-		public ReceiveTours(Profiler profiler) {
-			super(profiler);
+	private class ReceiveTours extends CyclicBehaviour{
+
+		public ReceiveTours() {
+			super(Profiler.this);
 		}
 		
 		@Override
@@ -82,9 +99,9 @@ public class Profiler extends AbstractAgent{
 		
 	}
 	
-	private DFAgentDescription[] findTourOrganizers(){
+	private DFAgentDescription[] findServices(){
 		try {
-			DFAgentDescription[] r =  DFService.search(this, tourOrganizer);
+			DFAgentDescription[] r =  DFService.search(this, new DFAgentDescription());
 			return r;
 		} catch (FIPAException e) {
 			e.printStackTrace();
@@ -93,7 +110,7 @@ public class Profiler extends AbstractAgent{
 	}
 	
 	private void prepareOrganizerSearch(){
-		tourOrganizer = new DFAgentDescription();
+		DFAgentDescription tourOrganizer = new DFAgentDescription();
 		ServiceDescription sd = new ServiceDescription();
 		sd.setType("tourOrganizer");
 		tourOrganizer.addServices(sd);

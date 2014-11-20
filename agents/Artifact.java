@@ -1,7 +1,10 @@
 package agents;
 
+import java.io.Serializable;
 
-public class Artifact {
+
+@SuppressWarnings("serial")
+public class Artifact implements Serializable{
 	int id;
 	String name;
 	String creator;

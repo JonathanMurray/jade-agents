@@ -11,10 +11,9 @@ import java.util.Iterator;
  * @author Jonathan
  *
  */
+@SuppressWarnings("serial")
 public class AbstractAgent extends Agent{
 
-	private static final long serialVersionUID = 1L;
-	
 	@Override
 	public void takeDown(){
 		System.out.println("takeDown " + getLocalName());
