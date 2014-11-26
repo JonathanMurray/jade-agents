@@ -14,9 +14,12 @@ import jade.proto.SubscriptionInitiator;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
+
+import agents.DutchAuctioneer.AuctioneerStrategy;
 
 
 @SuppressWarnings("serial")
@@ -44,7 +47,21 @@ public class Curator extends AbstractAgent{
 				);
 		addBehaviour(new ReplyAllArtifacts(allArtifacts));
 		addBehaviour(new ReplyArtifactInfo(artifactInfo));
+		
 		subscribeTourGuide();
+		
+		setupAuction();
+	}
+	
+	private void setupAuction() {
+		AID[] biddersArray = new AID[]{
+				new AID("b1", AID.ISLOCALNAME),
+				new AID("b2", AID.ISLOCALNAME),
+				new AID("b3", AID.ISLOCALNAME)
+		};
+		List<AID> bidders = Arrays.asList(biddersArray);
+		AuctioneerStrategy strategy = new AuctioneerStrategy(100, 50, 10);
+		addBehaviour(new DutchAuctioneer(this, bidders, strategy));
 	}
 	
 	private void subscribeTourGuide(){

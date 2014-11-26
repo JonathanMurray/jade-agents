@@ -1,7 +1,6 @@
 package agents;
 
 import jade.core.AID;
-import jade.core.behaviours.CyclicBehaviour;
 import jade.core.behaviours.FSMBehaviour;
 import jade.core.behaviours.OneShotBehaviour;
 import jade.core.behaviours.SimpleBehaviour;
@@ -16,31 +15,36 @@ import java.util.function.Consumer;
 @SuppressWarnings("serial")
 public class DutchBidder extends FSMBehaviour{
 	
-	private int proposal;
+	private int bid;
 	
-	public DutchBidder(Profiler agent, AID auctioneer, Consumer<Integer> successfulBidCallback){
+	public DutchBidder(AbstractAgent agent, AID auctioneer, Consumer<Integer> successfulBidCallback){
 		super(agent);
 		String WAIT_FOR_START = "WAIT_FOR_START";
 		String WAIT_FOR_CFP = "WAIT_FOR_OFFER";
 		String WAIT_FOR_REPLY = "WAIT_FOR_OFFER_REPLY";
 		String DONE = "DONE";
 		
-		CyclicBehaviour waitForStartMessage = new CyclicBehaviour() {
+		SimpleBehaviour waitForStartMessage = new SimpleBehaviour() {
+			private boolean done;
+			public boolean done(){
+				return done;
+			}
 			public void action() {
-				Behaviours.receive(this, agent, informStartOfAuction(), msg -> {agent.removeBehaviour(this);});
+				Behaviours.receive(this, agent, informStartOfAuction(), msg -> {done = true;});
 			}
 		}; 
 		
-		AchieveREResponder waitForCFP = new AchieveREResponder(agent, auctionOffer()){
+		AchieveREResponder waitForCFPAndRespond = new AchieveREResponder(agent, auctionOffer()){
 			protected ACLMessage prepareResultNotification(ACLMessage request, ACLMessage response) throws FailureException {
 				int offer = Integer.parseInt(request.getContent());
-				if(offer <= 10){
-					proposal = offer;
+				System.err.println(agent.getLocalName() + " got CFP: " + offer);
+				if(offer <= 60){
+					bid = offer;
 				}else{
-					proposal = 0;
+					bid = 0;
 				}
 				ACLMessage proposalMsg = new ACLMessage(ACLMessage.PROPOSE);
-				proposalMsg.setContent("" + proposal);
+				proposalMsg.setContent("" + bid);
 				proposalMsg.setProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION);
 				proposalMsg.addReceiver(auctioneer);
 				agent.sendVerbose(proposalMsg);
@@ -76,12 +80,12 @@ public class DutchBidder extends FSMBehaviour{
 		
 		OneShotBehaviour done = new OneShotBehaviour() {
 			public void action() {
-				successfulBidCallback.accept(proposal);
+				successfulBidCallback.accept(bid);
 			}
 		};
 		
 		registerFirstState(waitForStartMessage, WAIT_FOR_START);
-		registerState(waitForCFP, WAIT_FOR_CFP);
+		registerState(waitForCFPAndRespond, WAIT_FOR_CFP);
 		registerState(waitForReply, WAIT_FOR_REPLY);
 		registerLastState(done, DONE);
 		
