@@ -45,7 +45,6 @@ public class Curator extends AbstractAgent{
 		addBehaviour(new ReplyAllArtifacts(allArtifacts));
 		addBehaviour(new ReplyArtifactInfo(artifactInfo));
 		subscribeTourGuide();
-		
 	}
 	
 	private void subscribeTourGuide(){

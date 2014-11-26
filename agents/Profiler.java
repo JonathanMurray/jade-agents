@@ -21,11 +21,23 @@ public class Profiler extends AbstractAgent{
 
 	@Override
 	public void setupWithoutArgs(){
-		addBehaviour(new Welcome(1000));
+		addBehaviour(new TourWelcome(1000));
 	}
 	
-	private class Welcome extends WakerBehaviour{
-		public Welcome(long timeout){
+	@Override
+	public void setup(Object scenario){
+		if(((String)scenario).equals("auction")){
+			ensureHasCurator();
+			addBehaviour(new DutchBidder(this, curator, bid -> {
+				System.out.println("Won the auction for " + bid + " SEK!");
+			}));
+		}else if(((String)scenario).equals("tour")){
+			addBehaviour(new TourWelcome(1000));
+		}
+	}
+
+	private class TourWelcome extends WakerBehaviour{
+		public TourWelcome(long timeout){
 			super(Profiler.this, timeout);
 		}
 		
@@ -128,7 +140,7 @@ public class Profiler extends AbstractAgent{
 	}
 	
 	private void ensureHasCurator(){
-		if(curator == null){
+		while(curator == null){
 			DFAgentDescription[] curators = findService(Services.CURATOR);
 			if(curators.length > 0){
 				curator = curators[0].getName();
