@@ -7,6 +7,7 @@ import jade.domain.FIPAAgentManagement.DFAgentDescription;
 import jade.domain.FIPAAgentManagement.ServiceDescription;
 import jade.lang.acl.ACLMessage;
 
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Iterator;
 
@@ -72,14 +73,7 @@ public class AbstractAgent extends Agent{
 	}
 	
 	public void sendVerbose(ACLMessage msg){
-		String log = getLocalName() + " ---[" + msg.getPerformative() + "]--> ";
-		@SuppressWarnings("rawtypes")
-		Iterator receivers = msg.getAllReceiver();
-		while(receivers.hasNext()){
-			AID receiver = (AID) receivers.next();
-			log += receiver.getLocalName() + " ";
-		}
-		System.err.println(log);
+		System.err.println(Messages.debugSendMessage(this, msg));
 		send(msg);
 	}
 	

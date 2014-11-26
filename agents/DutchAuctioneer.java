@@ -9,6 +9,7 @@ import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 @SuppressWarnings("serial")
 public class DutchAuctioneer extends FSMBehaviour{
@@ -38,8 +39,8 @@ public class DutchAuctioneer extends FSMBehaviour{
 		highestBid = 0;
 		highestBidder = null;
 		
-		OneShotBehaviour informAuctionStart = sendToBidders(ACLMessage.INFORM, Messages.AUCTION_START);
-		OneShotBehaviour sendCFP = sendToBidders(ACLMessage.CFP, "" + currentPrice);
+		OneShotBehaviour informAuctionStart = sendToBidders(ACLMessage.INFORM, () -> Messages.AUCTION_START);
+		OneShotBehaviour sendCFP = sendToBidders(ACLMessage.CFP, () -> {return "" + currentPrice;});
 		ReceiveProposals receiveProposals = new ReceiveProposals();
 		OneShotBehaviour informAboutWinner = informBiddersAboutWinner();
 		
@@ -59,16 +60,30 @@ public class DutchAuctioneer extends FSMBehaviour{
 		private int receivedProposals = 0;
 		
 		public boolean done() {
-			return receivedProposals >= bidders.size();
+			boolean done = receivedProposals >= bidders.size();
+			if(done){
+				reset(); //Don't change order. reset() breaks condition
+				return true;
+			}
+			return false;
+		}
+		
+		@Override
+		public void reset() {
+			receivedProposals = 0;
+			super.reset();
 		}
 		
 		@Override
 		public int onEnd() {
 			if(currentPrice <= strategy.minPrice){
+				System.out.println("curPrice = " + currentPrice);
+				System.out.println("");
 				return FAILED_AUCTION;
 			}else if(highestBidder != null){
 				return SUCCESSFUL_AUCTION;
 			}else{
+				System.err.println("NO BID YET. LOWER PRICE TO " + (currentPrice - strategy.change));
 				currentPrice -= strategy.change;
 				return NO_BID_YET;
 			}
@@ -86,6 +101,7 @@ public class DutchAuctioneer extends FSMBehaviour{
 				}
 
 				receivedProposals ++;
+				System.out.println("now have received " + receivedProposals);
 			});
 		}
 	}
@@ -113,11 +129,11 @@ public class DutchAuctioneer extends FSMBehaviour{
 		};
 	}
 	
-	private OneShotBehaviour sendToBidders(int performative, String content){
+	private OneShotBehaviour sendToBidders(int performative, Supplier<String> content){
 		return new OneShotBehaviour() {
 			public void action() {
 				ACLMessage msg = new ACLMessage(performative);
-				msg.setContent(content);
+				msg.setContent(content.get());
 				msg.setProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION);
 				for(AID bidder : bidders){
 					msg.addReceiver(bidder);

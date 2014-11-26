@@ -6,6 +6,8 @@ import jade.core.behaviours.OneShotBehaviour;
 import jade.core.behaviours.SimpleBehaviour;
 import jade.domain.FIPANames;
 import jade.domain.FIPAAgentManagement.FailureException;
+import jade.domain.FIPAAgentManagement.NotUnderstoodException;
+import jade.domain.FIPAAgentManagement.RefuseException;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import jade.proto.AchieveREResponder;
@@ -35,6 +37,11 @@ public class DutchBidder extends FSMBehaviour{
 		}; 
 		
 		AchieveREResponder waitForCFPAndRespond = new AchieveREResponder(agent, auctionOffer()){
+			
+			protected ACLMessage prepareResponse(ACLMessage request) throws NotUnderstoodException, RefuseException {
+				return null;
+			}
+			
 			protected ACLMessage prepareResultNotification(ACLMessage request, ACLMessage response) throws FailureException {
 				int offer = Integer.parseInt(request.getContent());
 				System.err.println(agent.getLocalName() + " got CFP: " + offer);
@@ -47,7 +54,7 @@ public class DutchBidder extends FSMBehaviour{
 				proposalMsg.setContent("" + bid);
 				proposalMsg.setProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION);
 				proposalMsg.addReceiver(auctioneer);
-				agent.sendVerbose(proposalMsg);
+				System.err.println(Messages.debugSendMessage(agent, proposalMsg));
 				return proposalMsg;
 			}
 		};
