@@ -1,6 +1,10 @@
 package agents;
 import jade.core.AID;
 import jade.core.Agent;
+import jade.domain.DFService;
+import jade.domain.FIPAException;
+import jade.domain.FIPAAgentManagement.DFAgentDescription;
+import jade.domain.FIPAAgentManagement.ServiceDescription;
 import jade.lang.acl.ACLMessage;
 
 import java.util.Arrays;
@@ -16,7 +20,7 @@ public class AbstractAgent extends Agent{
 
 	@Override
 	public void takeDown(){
-		System.out.println("takeDown " + getLocalName());
+		System.err.println("[takeDown " + getLocalName() + "]");
 		//TODO should deregister any services (?)
 		super.takeDown();
 	}
@@ -24,7 +28,7 @@ public class AbstractAgent extends Agent{
 	@Override
 	public final void setup(){
 		Object[] args = getArguments();
-		System.out.println("setup " + getLocalName() + arrayToString(args));
+		System.err.println("[setup " + getLocalName() + arrayToString(args) + "]");
 		if(args == null){
 			setupWithoutArgs();
 		}else{
@@ -75,11 +79,37 @@ public class AbstractAgent extends Agent{
 			AID receiver = (AID) receivers.next();
 			log += receiver.getLocalName() + " ";
 		}
-		System.out.println(log);
+		System.err.println(log);
 		send(msg);
 	}
 	
+	public void publishService(String serviceType){
+		try {
+			DFAgentDescription dfd = new DFAgentDescription();
+			dfd.setName( getAID() );
+			ServiceDescription sd = new ServiceDescription();
+			sd.setType(serviceType);
+			sd.setName( getLocalName() );
+			dfd.addServices(sd);
+			DFService.register(this, dfd );
+		} catch (FIPAException e) {
+			e.printStackTrace();
+		} 
+	}
 	
+	public DFAgentDescription[] findService(String serviceType){
+		DFAgentDescription agent = new DFAgentDescription();
+		ServiceDescription service = new ServiceDescription();
+		service.setType(serviceType);
+		agent.addServices(service);
+		DFAgentDescription[] found = new DFAgentDescription[]{};
+		try {
+			found = DFService.search(this, agent);
+		} catch (FIPAException e) {
+			e.printStackTrace();
+		}
+		return found;
+	}
 	
 	private String arrayToString(Object[] array){
 		if(array == null){

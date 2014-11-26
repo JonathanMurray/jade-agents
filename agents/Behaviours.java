@@ -12,7 +12,7 @@ public class Behaviours {
 	public static void receive(Behaviour behaviour, Agent agent, MessageTemplate template, Consumer<ACLMessage> msgHandler){
 		ACLMessage msg = agent.receive(template);
 		if(msg != null){
-			System.out.println(agent.getLocalName() + " <--[" + msg.getPerformative() + "]-- " +  msg.getSender().getLocalName());
+			System.err.println(agent.getLocalName() + " <--[" + msg.getPerformative() + "]-- " +  msg.getSender().getLocalName());
 			msgHandler.accept(msg);
 		}else{
 			behaviour.block();

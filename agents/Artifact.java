@@ -18,4 +18,8 @@ public class Artifact implements Serializable{
 		this.creationYear = creationYear;
 		this.creationPlace = creationPlace;
 	}
+	
+	public String toString(){
+		return name + " (by " + creator + ", " + creationPlace + ", " + creationYear + ")";
+	}
 }
