@@ -5,124 +5,125 @@ import jade.core.behaviours.FSMBehaviour;
 import jade.core.behaviours.OneShotBehaviour;
 import jade.core.behaviours.SimpleBehaviour;
 import jade.domain.FIPANames;
-import jade.domain.FIPAAgentManagement.FailureException;
-import jade.domain.FIPAAgentManagement.NotUnderstoodException;
-import jade.domain.FIPAAgentManagement.RefuseException;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
-import jade.proto.AchieveREResponder;
 
 import java.util.function.Consumer;
 
 @SuppressWarnings("serial")
 public class DutchBidder extends FSMBehaviour{
 	
+	private final static String STATE_BEFORE_START = "WAIT_FOR_START";
+	private final static String STATE_BIDDING = "WAIT_FOR_OFFER";
+	private final static String STATE_DONE = "DONE";
+	
 	private int bid;
+	private AID auctioneer;
+	private AbstractAgent agent;
+	private Consumer<Integer> successfulBidCallback;
 	
 	public DutchBidder(AbstractAgent agent, AID auctioneer, Consumer<Integer> successfulBidCallback){
 		super(agent);
-		String WAIT_FOR_START = "WAIT_FOR_START";
-		String WAIT_FOR_CFP = "WAIT_FOR_OFFER";
-		String WAIT_FOR_REPLY = "WAIT_FOR_OFFER_REPLY";
-		String DONE = "DONE";
 		
-		SimpleBehaviour waitForStartMessage = new SimpleBehaviour() {
-			private boolean done;
-			public boolean done(){
-				return done;
-			}
-			public void action() {
-				Behaviours.receive(this, agent, informStartOfAuction(), msg -> {done = true;});
-			}
-		}; 
+		this.auctioneer = auctioneer;
+		this.agent = agent;
+		this.successfulBidCallback = successfulBidCallback;
 		
-		AchieveREResponder waitForCFPAndRespond = new AchieveREResponder(agent, auctionOffer()){
-			
-			protected ACLMessage prepareResponse(ACLMessage request) throws NotUnderstoodException, RefuseException {
-				return null;
-			}
-			
-			protected ACLMessage prepareResultNotification(ACLMessage request, ACLMessage response) throws FailureException {
-				int offer = Integer.parseInt(request.getContent());
-				System.err.println(agent.getLocalName() + " got CFP: " + offer);
-				if(offer <= 60){
-					bid = offer;
-				}else{
-					bid = 0;
-				}
-				ACLMessage proposalMsg = new ACLMessage(ACLMessage.PROPOSE);
-				proposalMsg.setContent("" + bid);
-				proposalMsg.setProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION);
-				proposalMsg.addReceiver(auctioneer);
-				System.err.println(Messages.debugSendMessage(agent, proposalMsg));
-				return proposalMsg;
-			}
-		};
+		SimpleBehaviour beforeStart = new BeforeStart();
+		SimpleBehaviour doBidding = new DoBidding(); 
+		OneShotBehaviour done = new Done();
 		
-		SimpleBehaviour waitForReply = new SimpleBehaviour() {
+		registerFirstState(beforeStart, STATE_BEFORE_START);
+		registerState(doBidding, STATE_BIDDING);
+		registerLastState(done, STATE_DONE);
+		
+		registerDefaultTransition(STATE_BEFORE_START, STATE_BIDDING);
+		registerDefaultTransition(STATE_BIDDING, STATE_DONE);
+	}
+	
+	private class BeforeStart extends SimpleBehaviour{
+		private boolean done;
+		public boolean done(){
+			return done;
+		}
+		public void action() {
+			MessageTemplate template = MessageTemplate.and(
+					MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION),
+					MessageTemplate.MatchContent(Messages.AUCTION_START)
+			);
+			Behaviours.receive(this, DutchBidder.this.getAgent(), template, msg -> {done = true;});
+		}
+	}
 
-			private boolean done = false;
-			private boolean accepted = false;
-			
-			public boolean done() {
-				return done;
-			}
-			
-			@Override
-			public int onEnd() {
-				return accepted? 1 : 0;
-			}
-			
-			public void action() {
-				Behaviours.receive(this, agent, offerReply(), msg -> {
-					if(msg.getPerformative() == ACLMessage.REFUSE){
-						accepted = false;
-					}else if(msg.getPerformative() == ACLMessage.ACCEPT_PROPOSAL){
-						accepted = true;
-					}
-					done = true;
-				});
-			}
-		};
+	private class DoBidding extends SimpleBehaviour{
+		private int state = 0;
+		private boolean bidAccepted = false;
 		
-		OneShotBehaviour done = new OneShotBehaviour() {
-			public void action() {
-				successfulBidCallback.accept(bid);
+		@Override
+		public void action() {
+			switch(state){
+			case 0:
+				receiveRequest();
+				state = 1;
+				break;
+			case 1:
+				receiveBidResponse();
+				state = 0;
+				break;
 			}
-		};
+		}
 		
-		registerFirstState(waitForStartMessage, WAIT_FOR_START);
-		registerState(waitForCFPAndRespond, WAIT_FOR_CFP);
-		registerState(waitForReply, WAIT_FOR_REPLY);
-		registerLastState(done, DONE);
+		@Override
+		public boolean done() {
+			return bidAccepted;
+		}
 		
-		registerDefaultTransition(WAIT_FOR_START, WAIT_FOR_CFP);
-		registerDefaultTransition(WAIT_FOR_CFP, WAIT_FOR_REPLY);
-		registerTransition(WAIT_FOR_REPLY, WAIT_FOR_CFP, 0);
-		registerTransition(WAIT_FOR_REPLY, DONE, 1);
+		private void receiveRequest(){
+			MessageTemplate template = MessageTemplate.and(
+					MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION),
+					MessageTemplate.MatchPerformative(ACLMessage.REQUEST)
+			);
+			Behaviours.receive(this, getAgent(), template, this::handleRequest);
+		}
+		
+		private void handleRequest(ACLMessage msg){
+			int offer = Integer.parseInt(msg.getContent());
+			if(offer <= 60){
+				bid = offer;
+			}else{
+				bid = 0;
+			}
+			ACLMessage bidMsg = msg.createReply();
+			bidMsg.setPerformative(ACLMessage.INFORM);
+			bidMsg.setContent("" + bid);
+			bidMsg.setProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION);
+			agent.sendVerbose(bidMsg);
+		}
+		
+		private void receiveBidResponse(){
+			MessageTemplate template = MessageTemplate.and(
+					MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION),
+					MessageTemplate.or(
+							MessageTemplate.MatchPerformative(ACLMessage.ACCEPT_PROPOSAL),
+							MessageTemplate.MatchPerformative(ACLMessage.REFUSE)
+					)
+			); 
+			Behaviours.receive(this, agent, template, this::handleBidResponse);
+		}
+		
+		private void handleBidResponse(ACLMessage msg){
+			if(msg.getPerformative() == ACLMessage.REFUSE){
+				
+			}else if(msg.getPerformative() == ACLMessage.ACCEPT_PROPOSAL){
+				bidAccepted = true;
+			}
+		}
 	}
 	
-	private MessageTemplate informStartOfAuction(){
-		return MessageTemplate.and(
-				MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION),
-				MessageTemplate.MatchContent(Messages.AUCTION_START)
-		);
+	private class Done extends OneShotBehaviour{
+		public void action() {
+			successfulBidCallback.accept(bid);
+		}
 	}
 	
-	private MessageTemplate auctionOffer(){
-		return MessageTemplate.and(
-				MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION),
-				MessageTemplate.MatchPerformative(ACLMessage.CFP)
-		);
-	}
-	
-	private MessageTemplate offerReply(){
-		return MessageTemplate.and(
-				MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION),
-				MessageTemplate.or(
-						MessageTemplate.MatchPerformative(ACLMessage.ACCEPT_PROPOSAL),
-						MessageTemplate.MatchPerformative(ACLMessage.REFUSE)
-				)
-		); 
-	}
 }

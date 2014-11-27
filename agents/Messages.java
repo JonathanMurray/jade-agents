@@ -9,6 +9,7 @@ import java.util.Iterator;
 
 public class Messages {
 	public static String AUCTION_START = "AUCTION_START";
+	public static String AUCTION_FAILED = "AUCTION_FAILED";
 	
 	public static String performativeStr(int performative){
 		try {
@@ -24,6 +25,9 @@ public class Messages {
 	}
 	
 	private static String debugMessageContent(ACLMessage msg){
+		if(msg.getContent() == null){
+			return "";
+		}
 		String content;
 		int len = 25;
 		if(msg.getContent().length() > len){

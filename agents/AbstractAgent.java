@@ -1,5 +1,4 @@
 package agents;
-import jade.core.AID;
 import jade.core.Agent;
 import jade.domain.DFService;
 import jade.domain.FIPAException;
@@ -7,9 +6,7 @@ import jade.domain.FIPAAgentManagement.DFAgentDescription;
 import jade.domain.FIPAAgentManagement.ServiceDescription;
 import jade.lang.acl.ACLMessage;
 
-import java.lang.reflect.Field;
 import java.util.Arrays;
-import java.util.Iterator;
 
 /**
  * Override the setup method with the desired number of arguments.

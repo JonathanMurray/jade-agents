@@ -9,15 +9,19 @@ import java.util.function.Consumer;
 
 public class Behaviours {
 	
+	//TODO
 	public static void receive(Behaviour behaviour, Agent agent, MessageTemplate template, Consumer<ACLMessage> msgHandler){
-		ACLMessage msg = agent.receive(template);
-		if(msg != null){
-			System.err.println(
-				Messages.debugReceiveMessage(agent, msg)
-			);
-			msgHandler.accept(msg);
-		}else{
-			behaviour.block();
+		while(true){
+			ACLMessage msg = agent.receive(template);
+			if(msg != null){
+				System.err.println(
+					Messages.debugReceiveMessage(agent, msg)
+				);
+				msgHandler.accept(msg);
+				return;
+			}else{
+				behaviour.block();
+			}
 		}
 	}
 }

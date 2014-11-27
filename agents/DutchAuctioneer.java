@@ -8,20 +8,23 @@ import jade.domain.FIPANames;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
-import java.util.function.Supplier;
 
 @SuppressWarnings("serial")
 public class DutchAuctioneer extends FSMBehaviour{
 	
-	final String INFORM = "INFORM";
-	final String SEND_CFP = "SEND_CFP";
-	final String RECEIVE_PROP = "RECEIVE_PROP";
-	final String INFORM_ABOUT_WINNER = "INFORM_ABOUT_WINNER";
+	final static String STATE_INFORM_START = "INFORM_START";
+	final static String STATE_SEND_REQUEST = "SEND_CFP";
+	final static String STATE_RECEIVE_BIDS = "RECEIVE_PROP";
+	final static String STATE_REFUSE_BIDS = "REFUSE_BIDS";
+	final static String STATE_INFORM_ABOUT_WINNER = "INFORM_ABOUT_WINNER";
+	final static String STATE_INFORM_FAILED_AUCTION = "INFORM_FAIL";
 	
-	final int FAILED_AUCTION = 0;
-	final int SUCCESSFUL_AUCTION = 1;
-	final int NO_BID_YET = 2;
+	final static int FAILED_AUCTION = 0;
+	final static int SUCCESSFUL_AUCTION = 1;
+	final static int NO_BID_YET = 2;
 	
 	private AbstractAgent agent;
 	private List<AID> bidders;
@@ -39,24 +42,46 @@ public class DutchAuctioneer extends FSMBehaviour{
 		highestBid = 0;
 		highestBidder = null;
 		
-		OneShotBehaviour informAuctionStart = sendToBidders(ACLMessage.INFORM, () -> Messages.AUCTION_START);
-		OneShotBehaviour sendCFP = sendToBidders(ACLMessage.CFP, () -> {return "" + currentPrice;});
-		ReceiveProposals receiveProposals = new ReceiveProposals();
-		OneShotBehaviour informAboutWinner = informBiddersAboutWinner();
+		OneShotBehaviour informAuctionStart = new InformAuctionStart();
+		OneShotBehaviour sendRequest = new SendRequest();
+		SimpleBehaviour receiveBids = new ReceiveBids();
+		OneShotBehaviour refuseBids = new RefuseBids();
+		OneShotBehaviour informAboutWinner = new InformAboutWinner();
+		OneShotBehaviour informFailedAuction = new InformFailedAuction();
 		
-		registerFirstState(informAuctionStart, INFORM);
-		registerState(sendCFP, SEND_CFP);
-		registerState(receiveProposals, RECEIVE_PROP);
-		registerLastState(informAboutWinner, INFORM_ABOUT_WINNER);
+		registerFirstState(informAuctionStart, STATE_INFORM_START);
+		registerState(sendRequest, STATE_SEND_REQUEST);
+		registerState(receiveBids, STATE_RECEIVE_BIDS);
+		registerState(refuseBids, STATE_REFUSE_BIDS);
+		registerLastState(informAboutWinner, STATE_INFORM_ABOUT_WINNER);
+		registerLastState(informFailedAuction, STATE_INFORM_FAILED_AUCTION);
 		
-		registerDefaultTransition(INFORM, SEND_CFP);
-		registerDefaultTransition(SEND_CFP, RECEIVE_PROP);
-		registerTransition(RECEIVE_PROP, SEND_CFP, NO_BID_YET);
-		registerTransition(RECEIVE_PROP, INFORM_ABOUT_WINNER, SUCCESSFUL_AUCTION);
+		registerDefaultTransition(STATE_INFORM_START, STATE_SEND_REQUEST);
+		registerDefaultTransition(STATE_SEND_REQUEST, STATE_RECEIVE_BIDS);
+		registerTransition(STATE_RECEIVE_BIDS, STATE_REFUSE_BIDS, NO_BID_YET);
+		registerTransition(STATE_RECEIVE_BIDS, STATE_INFORM_ABOUT_WINNER, SUCCESSFUL_AUCTION);
+		registerDefaultTransition(STATE_REFUSE_BIDS, STATE_SEND_REQUEST);
 		//TODO not handling failed auction yet.
 	}
 	
-	private class ReceiveProposals extends SimpleBehaviour{
+	private class InformAuctionStart extends OneShotBehaviour{
+		public void action() {
+			ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
+			msg.setContent(Messages.AUCTION_START);
+			sendDutchMsg(msg, bidders);
+		}
+	}
+	
+	private class SendRequest extends OneShotBehaviour{
+		public void action() {
+			ACLMessage msg = new ACLMessage(ACLMessage.REQUEST);
+			msg.setContent("" + currentPrice);
+			msg.setReplyWith("" + currentPrice);
+			sendDutchMsg(msg, bidders);
+		}
+	}
+	
+	private class ReceiveBids extends SimpleBehaviour{
 		private int receivedProposals = 0;
 		
 		public boolean done() {
@@ -77,8 +102,6 @@ public class DutchAuctioneer extends FSMBehaviour{
 		@Override
 		public int onEnd() {
 			if(currentPrice <= strategy.minPrice){
-				System.out.println("curPrice = " + currentPrice);
-				System.out.println("");
 				return FAILED_AUCTION;
 			}else if(highestBidder != null){
 				return SUCCESSFUL_AUCTION;
@@ -91,56 +114,55 @@ public class DutchAuctioneer extends FSMBehaviour{
 		
 		@Override
 		public void action() {
-			Behaviours.receive(this, agent, proposalTemplate(), msg -> {
-				final int bid = Integer.parseInt(msg.getContent());
-				System.err.println("received bid " + bid + " from " + msg.getSender().getLocalName());
-				if(bid >= currentPrice && bid > highestBid){
-					highestBid = bid;
-					highestBidder = msg.getSender();
-					System.err.println("It's winning");
-				}
-
-				receivedProposals ++;
-				System.out.println("now have received " + receivedProposals);
-			});
+			MessageTemplate template = MessageTemplate.and(
+					MessageTemplate.and(
+							MessageTemplate.MatchPerformative(ACLMessage.INFORM),
+							MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION)
+						),
+						MessageTemplate.MatchInReplyTo("" + currentPrice)
+					);
+			Behaviours.receive(this, agent, template, this::handleBid);
+		}
+		
+		private void handleBid(ACLMessage msg){
+			final int bid = Integer.parseInt(msg.getContent());
+			if(bid >= currentPrice && bid > highestBid){
+				highestBid = bid;
+				highestBidder = msg.getSender();
+				System.err.println("It's winning");
+			}
+			receivedProposals ++;
 		}
 	}
 	
-	private MessageTemplate proposalTemplate(){
-		return MessageTemplate.MatchPerformative(ACLMessage.PROPOSE);
+	private class RefuseBids extends OneShotBehaviour{
+		public void action() {
+			ACLMessage msg = new ACLMessage(ACLMessage.REFUSE);
+			sendDutchMsg(msg, bidders);
+		}
 	}
 	
-	private OneShotBehaviour informBiddersAboutWinner(){
-		return new OneShotBehaviour() {
-			public void action() {
-				ACLMessage winnerMsg = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);
-				winnerMsg.addReceiver(highestBidder);
-				winnerMsg.setProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION);
-				agent.sendVerbose(winnerMsg);
-				
-				ACLMessage loserMsg = new ACLMessage(ACLMessage.REFUSE);
-				loserMsg.setProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION);
-				bidders.stream().filter(b -> b != highestBidder).forEach(loser -> {
-					loserMsg.addReceiver(loser);
-				});
-				agent.sendVerbose(loserMsg);
-				System.err.println("Informing bidders about winner");
-			}
-		};
+	private class InformAboutWinner extends OneShotBehaviour{
+		public void action() {
+			ACLMessage winnerMsg = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);
+			sendDutchMsg(winnerMsg, highestBidder);
+			
+			ACLMessage loserMsg = new ACLMessage(ACLMessage.REFUSE);
+			loserMsg.setProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION);
+			bidders.stream().filter(b -> !b.equals(highestBidder)).forEach(loser -> {
+				loserMsg.addReceiver(loser);
+			});
+			agent.sendVerbose(loserMsg);
+			System.err.println("Informing bidders about winner.");
+		}
 	}
 	
-	private OneShotBehaviour sendToBidders(int performative, Supplier<String> content){
-		return new OneShotBehaviour() {
-			public void action() {
-				ACLMessage msg = new ACLMessage(performative);
-				msg.setContent(content.get());
-				msg.setProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION);
-				for(AID bidder : bidders){
-					msg.addReceiver(bidder);
-				}
-				agent.sendVerbose(msg);
-			}
-		};
+	private class InformFailedAuction extends OneShotBehaviour{
+		public void action() {
+			ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
+			msg.setContent(Messages.AUCTION_FAILED);
+			sendDutchMsg(msg, bidders);
+		}
 	}
 	
 	public static class AuctioneerStrategy{
@@ -152,5 +174,17 @@ public class DutchAuctioneer extends FSMBehaviour{
 			this.minPrice = minPrice;
 			this.change = change;
 		}
+	}
+	
+	private void sendDutchMsg(ACLMessage msg, Collection<AID> receivers){
+		msg.setProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION);
+		for(AID receiver : receivers){
+			msg.addReceiver(receiver);
+		}
+		agent.sendVerbose(msg);
+	}
+	
+	private void sendDutchMsg(ACLMessage msg, AID receiver){
+		sendDutchMsg(msg, Arrays.asList(new AID[]{receiver}));
 	}
 }
