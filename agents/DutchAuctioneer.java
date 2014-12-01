@@ -17,7 +17,7 @@ public class DutchAuctioneer extends FSMBehaviour{
 	
 	final static String STATE_INFORM_START = "INFORM_START";
 	final static String STATE_SEND_REQUEST = "SEND_CFP";
-	final static String STATE_RECEIVE_BIDS = "RECEIVE_PROP";
+	final static String STATE_AWAIT_BIDS = "RECEIVE_PROP";
 	final static String STATE_REFUSE_BIDS = "REFUSE_BIDS";
 	final static String STATE_INFORM_ABOUT_WINNER = "INFORM_ABOUT_WINNER";
 	final static String STATE_INFORM_FAILED_AUCTION = "INFORM_FAIL";
@@ -28,38 +28,41 @@ public class DutchAuctioneer extends FSMBehaviour{
 	
 	private AbstractAgent agent;
 	private List<AID> bidders;
-	int highestBid;
-	AID highestBidder;
-	int currentPrice;
-	AuctioneerStrategy strategy;
+	private int highestBid;
+	private AID highestBidder;
+	private int currentPrice;
+	private AuctioneerStrategy strategy;
+	private int artifactId;
 	
-	public DutchAuctioneer(AbstractAgent agent, List<AID> bidders, AuctioneerStrategy strategy){
+	public DutchAuctioneer(AbstractAgent agent, List<AID> bidders, int artifactId, AuctioneerStrategy strategy){
 		this.bidders = bidders;
 		this.agent = agent;
 		this.strategy = strategy;
+		this.artifactId = artifactId;
 		
 		currentPrice = strategy.startPrice;
 		highestBid = 0;
 		highestBidder = null;
 		
+		
 		OneShotBehaviour informAuctionStart = new InformAuctionStart();
 		OneShotBehaviour sendRequest = new SendRequest();
-		SimpleBehaviour receiveBids = new ReceiveBids();
+		SimpleBehaviour awaitBids = new AwaitBids();
 		OneShotBehaviour refuseBids = new RefuseBids();
 		OneShotBehaviour informAboutWinner = new InformAboutWinner();
 		OneShotBehaviour informFailedAuction = new InformFailedAuction();
 		
 		registerFirstState(informAuctionStart, STATE_INFORM_START);
 		registerState(sendRequest, STATE_SEND_REQUEST);
-		registerState(receiveBids, STATE_RECEIVE_BIDS);
+		registerState(awaitBids, STATE_AWAIT_BIDS);
 		registerState(refuseBids, STATE_REFUSE_BIDS);
 		registerLastState(informAboutWinner, STATE_INFORM_ABOUT_WINNER);
 		registerLastState(informFailedAuction, STATE_INFORM_FAILED_AUCTION);
 		
 		registerDefaultTransition(STATE_INFORM_START, STATE_SEND_REQUEST);
-		registerDefaultTransition(STATE_SEND_REQUEST, STATE_RECEIVE_BIDS);
-		registerTransition(STATE_RECEIVE_BIDS, STATE_REFUSE_BIDS, NO_BID_YET);
-		registerTransition(STATE_RECEIVE_BIDS, STATE_INFORM_ABOUT_WINNER, SUCCESSFUL_AUCTION);
+		registerDefaultTransition(STATE_SEND_REQUEST, STATE_AWAIT_BIDS);
+		registerTransition(STATE_AWAIT_BIDS, STATE_REFUSE_BIDS, NO_BID_YET);
+		registerTransition(STATE_AWAIT_BIDS, STATE_INFORM_ABOUT_WINNER, SUCCESSFUL_AUCTION);
 		registerDefaultTransition(STATE_REFUSE_BIDS, STATE_SEND_REQUEST);
 		//TODO not handling failed auction yet.
 	}
@@ -67,7 +70,8 @@ public class DutchAuctioneer extends FSMBehaviour{
 	private class InformAuctionStart extends OneShotBehaviour{
 		public void action() {
 			ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
-			msg.setContent(Messages.AUCTION_START);
+			msg.setConversationId(Conversations.AUCTION_START);
+			msg.setContent("" + artifactId);
 			sendDutchMsg(msg, bidders);
 		}
 	}
@@ -81,7 +85,7 @@ public class DutchAuctioneer extends FSMBehaviour{
 		}
 	}
 	
-	private class ReceiveBids extends SimpleBehaviour{
+	private class AwaitBids extends SimpleBehaviour{
 		private int receivedProposals = 0;
 		
 		public boolean done() {

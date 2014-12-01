@@ -8,7 +8,7 @@ import java.lang.reflect.Field;
 import java.util.Iterator;
 
 public class Messages {
-	public static String AUCTION_START = "AUCTION_START";
+	
 	public static String AUCTION_FAILED = "AUCTION_FAILED";
 	
 	public static String performativeStr(int performative){

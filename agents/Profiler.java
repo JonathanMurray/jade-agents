@@ -7,6 +7,7 @@ import jade.core.behaviours.WakerBehaviour;
 import jade.domain.FIPAAgentManagement.DFAgentDescription;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.UnreadableException;
+import jade.proto.AchieveREInitiator;
 import jade.proto.ProposeInitiator;
 import jade.proto.SimpleAchieveREInitiator;
 
@@ -16,7 +17,6 @@ public class Profiler extends AbstractAgent{
 	private String name = "Jonathan";
 	private int age = 24;
 	private String occupation = "Student";
-	private DFAgentDescription[] tourOrganizers;
 	private AID curator;
 
 	@Override
@@ -25,15 +25,29 @@ public class Profiler extends AbstractAgent{
 	}
 	
 	@Override
-	public void setup(Object scenario){
-		if(((String)scenario).equals("auction")){
-			ensureHasCurator();
-			addBehaviour(new DutchBidder(this, curator, bid -> {
-				System.out.println("Won the auction for " + bid + " SEK!");
-			}));
-		}else if(((String)scenario).equals("tour")){
-			addBehaviour(new TourWelcome(1000));
-		}
+	public void setup(Object willingToPayArg){
+		int willingToPay = Integer.parseInt((String) willingToPayArg);
+		addBehaviour(new DutchBidder(this, willingToPay, this::notifyWonAuction));
+	}
+	
+	private void notifyWonAuction(Integer artifactId, Integer price){
+		ensureHasCurator();
+		ACLMessage msg = new ACLMessage(ACLMessage.REQUEST);
+		msg.setConversationId(Conversations.REQUEST_ARTIFACT_INFO);
+		msg.setContent("" + artifactId);
+		msg.addReceiver(curator);
+		addBehaviour(new AchieveREInitiator(this, msg){
+			@Override
+			protected void handleInform(ACLMessage inform) {
+				try {
+					Artifact artifact = (Artifact) inform.getContentObject();
+					System.out.println(getLocalName() + " won " + artifact.name + " for " + price);
+				} catch (UnreadableException e) {
+					e.printStackTrace();
+				}
+			}
+		});
+		
 	}
 
 	private class TourWelcome extends WakerBehaviour{

@@ -6,6 +6,8 @@ import jade.core.behaviours.TickerBehaviour;
 import jade.domain.DFService;
 import jade.domain.FIPAException;
 import jade.domain.FIPAAgentManagement.DFAgentDescription;
+import jade.domain.FIPAAgentManagement.NotUnderstoodException;
+import jade.domain.FIPAAgentManagement.RefuseException;
 import jade.domain.FIPAAgentManagement.ServiceDescription;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
@@ -61,7 +63,8 @@ public class Curator extends AbstractAgent{
 		};
 		List<AID> bidders = Arrays.asList(biddersArray);
 		AuctioneerStrategy strategy = new AuctioneerStrategy(100, 50, 10);
-		addBehaviour(new DutchAuctioneer(this, bidders, strategy));
+		int artifactId = artifacts.keySet().iterator().next();
+		addBehaviour(new DutchAuctioneer(this, bidders, artifactId, strategy));
 	}
 	
 	private void subscribeTourGuide(){
@@ -112,6 +115,11 @@ public class Curator extends AbstractAgent{
 		public ReplyArtifactInfo(MessageTemplate template) {
 			super(Curator.this, template);
 		}
+		
+		@Override
+		protected ACLMessage prepareResponse(ACLMessage request) throws NotUnderstoodException, RefuseException {
+			return null;
+		}
 
 		@Override
 		protected ACLMessage prepareResultNotification(ACLMessage request, ACLMessage response){
@@ -133,6 +141,11 @@ public class Curator extends AbstractAgent{
 
 		public ReplyAllArtifacts(MessageTemplate template) {
 			super(Curator.this, template);
+		}
+		
+		@Override
+		protected ACLMessage prepareResponse(ACLMessage request) throws NotUnderstoodException, RefuseException {
+			return null;
 		}
 
 		@Override

@@ -1,6 +1,5 @@
 package agents;
 
-import jade.core.AID;
 import jade.core.behaviours.FSMBehaviour;
 import jade.core.behaviours.OneShotBehaviour;
 import jade.core.behaviours.SimpleBehaviour;
@@ -8,7 +7,7 @@ import jade.domain.FIPANames;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 @SuppressWarnings("serial")
 public class DutchBidder extends FSMBehaviour{
@@ -18,16 +17,17 @@ public class DutchBidder extends FSMBehaviour{
 	private final static String STATE_DONE = "DONE";
 	
 	private int bid;
-	private AID auctioneer;
 	private AbstractAgent agent;
-	private Consumer<Integer> successfulBidCallback;
+	private BiConsumer<Integer, Integer> successfulBidCallback;
+	private int willingToPay;
+	private int artifactId;
 	
-	public DutchBidder(AbstractAgent agent, AID auctioneer, Consumer<Integer> successfulBidCallback){
+	public DutchBidder(AbstractAgent agent, int willingToPay, BiConsumer<Integer, Integer> successfulBidCallback){
 		super(agent);
 		
-		this.auctioneer = auctioneer;
 		this.agent = agent;
 		this.successfulBidCallback = successfulBidCallback;
+		this.willingToPay = willingToPay;
 		
 		SimpleBehaviour beforeStart = new BeforeStart();
 		SimpleBehaviour doBidding = new DoBidding(); 
@@ -49,9 +49,12 @@ public class DutchBidder extends FSMBehaviour{
 		public void action() {
 			MessageTemplate template = MessageTemplate.and(
 					MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION),
-					MessageTemplate.MatchContent(Messages.AUCTION_START)
+					MessageTemplate.MatchConversationId(Conversations.AUCTION_START)
 			);
-			Behaviours.receive(this, DutchBidder.this.getAgent(), template, msg -> {done = true;});
+			Behaviours.receive(this, DutchBidder.this.getAgent(), template, msg -> {
+				done = true;
+				artifactId = Integer.parseInt(msg.getContent());
+			});
 		}
 	}
 
@@ -88,7 +91,7 @@ public class DutchBidder extends FSMBehaviour{
 		
 		private void handleRequest(ACLMessage msg){
 			int offer = Integer.parseInt(msg.getContent());
-			if(offer <= 60){
+			if(offer <= willingToPay){
 				bid = offer;
 			}else{
 				bid = 0;
@@ -122,7 +125,7 @@ public class DutchBidder extends FSMBehaviour{
 	
 	private class Done extends OneShotBehaviour{
 		public void action() {
-			successfulBidCallback.accept(bid);
+			successfulBidCallback.accept(artifactId, bid);
 		}
 	}
 	
