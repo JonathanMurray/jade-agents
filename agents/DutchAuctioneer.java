@@ -63,7 +63,9 @@ public class DutchAuctioneer extends FSMBehaviour{
 		registerDefaultTransition(STATE_SEND_REQUEST, STATE_AWAIT_BIDS);
 		registerTransition(STATE_AWAIT_BIDS, STATE_REFUSE_BIDS, NO_BID_YET);
 		registerTransition(STATE_AWAIT_BIDS, STATE_INFORM_ABOUT_WINNER, SUCCESSFUL_AUCTION);
+		registerTransition(STATE_AWAIT_BIDS, STATE_INFORM_FAILED_AUCTION, FAILED_AUCTION);
 		registerDefaultTransition(STATE_REFUSE_BIDS, STATE_SEND_REQUEST);
+		
 		//TODO not handling failed auction yet.
 	}
 	
