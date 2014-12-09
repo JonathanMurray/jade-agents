@@ -27,7 +27,7 @@ public class Profiler extends AbstractAgent{
 	@Override
 	public void setup(Object willingToPayArg){
 		int willingToPay = Integer.parseInt((String) willingToPayArg);
-		addBehaviour(new DutchBidder(this, willingToPay, this::notifyWonAuction));
+		addBehaviour(new DutchBidder(this, willingToPay, this::notifyWonAuction, this::notifySomeoneElseWon));
 	}
 	
 	private void notifyWonAuction(Integer artifactId, Integer price){
@@ -47,6 +47,9 @@ public class Profiler extends AbstractAgent{
 				}
 			}
 		});
+	}
+	
+	private void notifySomeoneElseWon(Integer artifactId, Integer price){
 		
 	}
 

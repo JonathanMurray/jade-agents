@@ -12,33 +12,48 @@ import java.util.function.BiConsumer;
 @SuppressWarnings("serial")
 public class DutchBidder extends FSMBehaviour{
 	
+	private final static int BID_ACCEPTED = 0;
+	private final static int SOMEONE_ELSE_WON = 1;
+	
 	private final static String STATE_BEFORE_START = "WAIT_FOR_START";
 	private final static String STATE_BIDDING = "WAIT_FOR_OFFER";
-	private final static String STATE_DONE = "DONE";
+	private final static String STATE_BID_ACCEPTED = "BID_ACCEPTED";
+	private final static String STATE_SOMEONE_ELSE_WON = "SOMEONE_ELSE_WON";
 	
 	private int bid;
 	private AbstractAgent agent;
 	private BiConsumer<Integer, Integer> successfulBidCallback;
+	private BiConsumer<Integer, Integer> someoneElseWonCallback;
 	private int willingToPay;
 	private int artifactId;
 	
-	public DutchBidder(AbstractAgent agent, int willingToPay, BiConsumer<Integer, Integer> successfulBidCallback){
+	/**
+	 * 
+	 * @param agent
+	 * @param willingToPay
+	 * @param successfulBidCallback (artifactId, bid)
+	 */
+	public DutchBidder(AbstractAgent agent, int willingToPay, BiConsumer<Integer, Integer> successfulBidCallback, BiConsumer<Integer,Integer> someoneElseWonCallback){
 		super(agent);
 		
 		this.agent = agent;
 		this.successfulBidCallback = successfulBidCallback;
+		this.someoneElseWonCallback = someoneElseWonCallback;
 		this.willingToPay = willingToPay;
 		
 		SimpleBehaviour beforeStart = new BeforeStart();
 		SimpleBehaviour doBidding = new DoBidding(); 
-		OneShotBehaviour done = new Done();
+		OneShotBehaviour bidAccepted = new BidAccepted();
+		OneShotBehaviour someoneElseWon = new SomeoneElseWon();
 		
 		registerFirstState(beforeStart, STATE_BEFORE_START);
 		registerState(doBidding, STATE_BIDDING);
-		registerLastState(done, STATE_DONE);
+		registerLastState(bidAccepted, STATE_BID_ACCEPTED);
+		registerLastState(someoneElseWon, STATE_SOMEONE_ELSE_WON);
 		
 		registerDefaultTransition(STATE_BEFORE_START, STATE_BIDDING);
-		registerDefaultTransition(STATE_BIDDING, STATE_DONE);
+		registerTransition(STATE_BIDDING, STATE_BID_ACCEPTED, BID_ACCEPTED);
+		registerTransition(STATE_BIDDING, STATE_SOMEONE_ELSE_WON, SOMEONE_ELSE_WON);
 	}
 	
 	private class BeforeStart extends SimpleBehaviour{
@@ -51,42 +66,71 @@ public class DutchBidder extends FSMBehaviour{
 					MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION),
 					MessageTemplate.MatchConversationId(Conversations.AUCTION_START)
 			);
-			Behaviours.receive(this, DutchBidder.this.getAgent(), template, msg -> {
-				done = true;
-				artifactId = Integer.parseInt(msg.getContent());
-			});
+			ACLMessage msg = Behaviours.receive(DutchBidder.this.getAgent(), template);
+			if(msg == null){
+				block();
+				return;
+			}
+			done = true;
+			artifactId = Integer.parseInt(msg.getContent());
 		}
 	}
 
 	private class DoBidding extends SimpleBehaviour{
 		private int state = 0;
 		private boolean bidAccepted = false;
+		private boolean someoneElseWon = false;
 		
 		@Override
 		public void action() {
 			switch(state){
 			case 0:
-				receiveRequest();
-				state = 1;
+				if(receiveRequest()){
+					state = 1;
+				}
 				break;
 			case 1:
-				receiveBidResponse();
-				state = 0;
+				if(receiveBidResponse()){
+					state = 0;
+				}
 				break;
 			}
 		}
 		
 		@Override
-		public boolean done() {
-			return bidAccepted;
+		public void onStart() {
+			System.out.println(agent.getLocalName() + " start do bidding");
+			super.onStart();
 		}
 		
-		private void receiveRequest(){
+		@Override
+		public boolean done() {
+			return bidAccepted || someoneElseWon;
+		}
+		
+		@Override
+		public int onEnd() {
+			if(bidAccepted){
+				return BID_ACCEPTED;
+			}else if(someoneElseWon){
+				return SOMEONE_ELSE_WON;
+			}else{
+				throw new RuntimeException();
+			}
+		}
+		
+		private boolean receiveRequest(){
 			MessageTemplate template = MessageTemplate.and(
 					MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION),
 					MessageTemplate.MatchPerformative(ACLMessage.REQUEST)
 			);
-			Behaviours.receive(this, getAgent(), template, this::handleRequest);
+			ACLMessage msg = Behaviours.receive( getAgent(), template);
+			if(msg == null){
+				block();
+				return false;
+			}
+			handleRequest(msg);
+			return true;
 		}
 		
 		private void handleRequest(ACLMessage msg){
@@ -103,7 +147,7 @@ public class DutchBidder extends FSMBehaviour{
 			agent.sendVerbose(bidMsg);
 		}
 		
-		private void receiveBidResponse(){
+		private boolean receiveBidResponse(){
 			MessageTemplate template = MessageTemplate.and(
 					MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION),
 					MessageTemplate.or(
@@ -111,21 +155,35 @@ public class DutchBidder extends FSMBehaviour{
 							MessageTemplate.MatchPerformative(ACLMessage.REFUSE)
 					)
 			); 
-			Behaviours.receive(this, agent, template, this::handleBidResponse);
+			ACLMessage msg = Behaviours.receive(agent, template);
+			if(msg == null){
+				block();
+				return false;
+			}
+			handleBidResponse(msg);
+			return true;
 		}
 		
 		private void handleBidResponse(ACLMessage msg){
 			if(msg.getPerformative() == ACLMessage.REFUSE){
-				
+				if(Messages.SOMEONE_ELSE_WON.equals(msg.getContent())){
+					someoneElseWon = true;
+				}
 			}else if(msg.getPerformative() == ACLMessage.ACCEPT_PROPOSAL){
 				bidAccepted = true;
 			}
 		}
 	}
 	
-	private class Done extends OneShotBehaviour{
+	private class BidAccepted extends OneShotBehaviour{
 		public void action() {
 			successfulBidCallback.accept(artifactId, bid);
+		}
+	}
+	
+	private class SomeoneElseWon extends OneShotBehaviour{
+		public void action(){
+			someoneElseWonCallback.accept(artifactId, bid);
 		}
 	}
 	

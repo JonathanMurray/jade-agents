@@ -7,6 +7,7 @@ import jade.domain.FIPAAgentManagement.ServiceDescription;
 import jade.lang.acl.ACLMessage;
 
 import java.util.Arrays;
+import java.util.Random;
 
 /**
  * Override the setup method with the desired number of arguments.
@@ -70,7 +71,7 @@ public class AbstractAgent extends Agent{
 	}
 	
 	public void sendVerbose(ACLMessage msg){
-		System.err.println(Messages.debugSendMessage(this, msg));
+//		System.err.println(Messages.debugSendMessage(this, msg));
 		send(msg);
 	}
 	

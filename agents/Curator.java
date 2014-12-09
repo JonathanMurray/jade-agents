@@ -64,7 +64,7 @@ public class Curator extends AbstractAgent{
 		List<AID> bidders = Arrays.asList(biddersArray);
 		AuctioneerStrategy strategy = new AuctioneerStrategy(100, 90, 10);
 		int artifactId = artifacts.keySet().iterator().next();
-		addBehaviour(new DutchAuctioneer(this, bidders, artifactId, strategy));
+		addBehaviour(new DutchAuctioneer(this, bidders, artifactId, strategy, (i,j)->{}));
 	}
 	
 	private void subscribeTourGuide(){

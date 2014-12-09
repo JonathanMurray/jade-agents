@@ -8,9 +8,11 @@ import jade.domain.FIPANames;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.BiConsumer;
 
 @SuppressWarnings("serial")
 public class DutchAuctioneer extends FSMBehaviour{
@@ -34,11 +36,14 @@ public class DutchAuctioneer extends FSMBehaviour{
 	private AuctioneerStrategy strategy;
 	private int artifactId;
 	
-	public DutchAuctioneer(AbstractAgent agent, List<AID> bidders, int artifactId, AuctioneerStrategy strategy){
+	private BiConsumer<Integer, Integer> afterAuctionCallback;
+	
+	public DutchAuctioneer(AbstractAgent agent, List<AID> bidders, int artifactId, AuctioneerStrategy strategy, BiConsumer<Integer, Integer> afterAuctionCallback){
 		this.bidders = bidders;
 		this.agent = agent;
 		this.strategy = strategy;
 		this.artifactId = artifactId;
+		this.afterAuctionCallback = afterAuctionCallback;
 		
 		currentPrice = strategy.startPrice;
 		highestBid = 0;
@@ -127,7 +132,12 @@ public class DutchAuctioneer extends FSMBehaviour{
 						),
 						MessageTemplate.MatchInReplyTo("" + currentPrice)
 					);
-			Behaviours.receive(this, agent, template, this::handleBid);
+			ACLMessage msg = Behaviours.receive(agent, template);
+			if(msg == null){
+				block();
+				return;
+			}
+			handleBid(msg);
 		}
 		
 		private void handleBid(ACLMessage msg){
@@ -138,6 +148,7 @@ public class DutchAuctioneer extends FSMBehaviour{
 				System.err.println("It's winning");
 			}
 			receivedProposals ++;
+			System.out.println(receivedProposals + " of " + bidders.size() + " bids received"); //TODO
 		}
 	}
 	
@@ -155,11 +166,12 @@ public class DutchAuctioneer extends FSMBehaviour{
 			
 			ACLMessage loserMsg = new ACLMessage(ACLMessage.REFUSE);
 			loserMsg.setProtocol(FIPANames.InteractionProtocol.FIPA_DUTCH_AUCTION);
+			loserMsg.setContent(Messages.SOMEONE_ELSE_WON);
 			bidders.stream().filter(b -> !b.equals(highestBidder)).forEach(loser -> {
 				loserMsg.addReceiver(loser);
 			});
 			agent.sendVerbose(loserMsg);
-			System.err.println("Informing bidders about winner.");
+			afterAuctionCallback.accept(artifactId, highestBid);
 		}
 	}
 	
@@ -168,10 +180,11 @@ public class DutchAuctioneer extends FSMBehaviour{
 			ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
 			msg.setContent(Messages.AUCTION_FAILED);
 			sendDutchMsg(msg, bidders);
+			afterAuctionCallback.accept(artifactId, highestBid);
 		}
 	}
 	
-	public static class AuctioneerStrategy{
+	public static class AuctioneerStrategy implements Serializable{
 		int startPrice;
 		int minPrice;
 		int change;

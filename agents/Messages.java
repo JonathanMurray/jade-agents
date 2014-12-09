@@ -10,6 +10,7 @@ import java.util.Iterator;
 public class Messages {
 	
 	public static String AUCTION_FAILED = "AUCTION_FAILED";
+	public static String SOMEONE_ELSE_WON = "SOMEONE_ELSE_WON";
 	
 	public static String performativeStr(int performative){
 		try {

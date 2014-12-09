@@ -32,20 +32,21 @@ public class TourGuide extends AbstractAgent{
 			super(tourGuide);
 		}
 		
+		@SuppressWarnings("unchecked")
 		@Override
 		public void action() {
 			MessageTemplate template = MessageTemplate.MatchPerformative(ACLMessage.INFORM);
-			Behaviours.receive(this, myAgent, template, new Consumer<ACLMessage>() {
-				@SuppressWarnings("unchecked")
-				public void accept(ACLMessage msg) {
-					try {
-						artifacts = (List<Integer>) msg.getContentObject();
-						System.err.println("[tourguide upd. artifacts.");
-					} catch (UnreadableException e) {
-						e.printStackTrace();
-					}
-				}
-			});
+			ACLMessage msg = Behaviours.receive(myAgent, template);
+			if(msg == null){
+				block();
+				return;
+			}
+			try {
+				artifacts = (List<Integer>) msg.getContentObject();
+				System.err.println("[tourguide upd. artifacts.");
+			} catch (UnreadableException e) {
+				e.printStackTrace();
+			}
 		}
 	}
 	
