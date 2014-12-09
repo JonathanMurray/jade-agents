@@ -2,13 +2,13 @@ package mobility;
 
 import jade.content.lang.sl.SLCodec;
 import jade.core.Location;
-import jade.core.behaviours.SequentialBehaviour;
 import jade.core.behaviours.SimpleBehaviour;
 import jade.core.behaviours.WakerBehaviour;
 import jade.domain.mobility.MobilityOntology;
 import jade.wrapper.ControllerException;
 
 import java.io.Serializable;
+import java.util.Random;
 import java.util.function.BiConsumer;
 
 import agents.AbstractAgent;
@@ -65,13 +65,11 @@ public class MobileBidder extends AbstractAgent{
 		}
 	}
 	
-	
-	
 	private void announceResults(){
 		if(bidAccepted){
 			System.out.println(getLocalName() + ": I won artifact-" + artifactId + " for " + winningBid);
 		}else{
-			System.out.println(getLocalName() + ": Someone else won artifact-" + artifactId + ". My bid was " + winningBid);
+			System.out.println(getLocalName() + ": Someone else won artifact-" + artifactId + ". My bid was " + myBid);
 		}
 	}
 
@@ -95,7 +93,8 @@ public class MobileBidder extends AbstractAgent{
 						public void onWake(){
 							if(!isClone){
 								System.out.println("mobileBidder wake, add bidder behaviour");
-								addBehaviour(new DutchBidder(MobileBidder.this, 50, new SuccessfulBidFunction(), new SomeoneElseWonFunction()));
+								int willingToPay = 40 + new Random().nextInt(40);
+								addBehaviour(new DutchBidder(MobileBidder.this, willingToPay, new SuccessfulBidFunction(), new SomeoneElseWonFunction()));
 							}
 						}
 					});
@@ -139,7 +138,8 @@ public class MobileBidder extends AbstractAgent{
 		isClone = true;
 		try {
 			System.out.println(getName() + " cloned to " + getContainerController().getContainerName());
-			addBehaviour(new DutchBidder(this, 50, new SuccessfulBidFunction(), new SomeoneElseWonFunction()));
+			int willingToPay = 40 + new Random().nextInt(40);
+			addBehaviour(new DutchBidder(this, willingToPay, new SuccessfulBidFunction(), new SomeoneElseWonFunction()));
 		} catch (ControllerException e) {
 			e.printStackTrace();
 		}

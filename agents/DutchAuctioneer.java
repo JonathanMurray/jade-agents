@@ -117,7 +117,7 @@ public class DutchAuctioneer extends FSMBehaviour{
 			}else if(highestBidder != null){
 				return SUCCESSFUL_AUCTION;
 			}else{
-				System.err.println("NO BID YET. LOWER PRICE TO " + (currentPrice - strategy.change));
+				System.err.println(agent.getLocalName() + ": NO BID YET. LOWER PRICE TO " + (currentPrice - strategy.change));
 				currentPrice -= strategy.change;
 				return NO_BID_YET;
 			}
@@ -145,7 +145,7 @@ public class DutchAuctioneer extends FSMBehaviour{
 			if(bid >= currentPrice && bid > highestBid){
 				highestBid = bid;
 				highestBidder = msg.getSender();
-				System.err.println("It's winning");
+				System.err.println(agent.getLocalName() + ": It's winning");
 			}
 			receivedProposals ++;
 			System.out.println(receivedProposals + " of " + bidders.size() + " bids received"); //TODO
