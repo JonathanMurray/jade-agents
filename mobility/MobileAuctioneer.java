@@ -33,7 +33,7 @@ public class MobileAuctioneer extends AbstractAgent{
 		this.strategy = (AuctioneerStrategy) strategy;
 		this.homeContainer = (String) homeContainer;
 		setupBehaviours();
-	}
+	} 
 	
 	private void setupBehaviours(){
 		addBehaviour(new SimpleBehaviour() {
